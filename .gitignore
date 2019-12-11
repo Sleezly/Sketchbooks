@@ -1,0 +1,7 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/slnx.sqlite
+/.vs/Sketchbooks/v16/Browse.VC.opendb
+/.vs/Sketchbooks/v16/Browse.VC.db
