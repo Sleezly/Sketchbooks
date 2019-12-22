@@ -1,0 +1,10 @@
+Install the Arduino IDE to install the usb driver
+https://www.arduino.cc/download_handler.php?f=/arduino-1.8.10-windows.exe
+
+Don't download the Windows Store version.
+
+
+Preferences -> add additional libraries
+http://arduino.esp8266.com/stable/package_esp8266com_index.json
+
+Board Manager -> esp -> esp8266 by esp8266 communicty -> install

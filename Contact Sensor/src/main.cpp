@@ -21,14 +21,14 @@ const int minAudibledelay = 1500;
 const int audibleDelaySteps = 750;
 
 // WIFI
-const char* ssid     = "TOM24";
-const char* password = "secret";   <-- SECRET
+const char* ssid     = "";
+const char* password = "";
 
 // MQTT
 const char* mqtthost = "192.168.1.2";
 const int   mqttport = 1883;
 const char* mqttuser = "esp8266";
-const char* mqttpass = "secret"; // <-- SECRET
+const char* mqttpass = "";
 const char* pubtopic = "home/pantry";
 const char* subtopic = "home/alarms";
 
@@ -51,12 +51,12 @@ void callback(char* topic, byte* payload, unsigned int length)
   }
   Serial.println("]");
 
-  StaticJsonBuffer<256> jsonBuffer;
-  JsonObject& parsed = jsonBuffer.parseObject(payload);
-
-  if (parsed.success())
+  StaticJsonDocument<256> jsonDocument;
+  DeserializationError error = deserializeJson(jsonDocument, payload);
+  
+  if (!error)
   {
-    const char * stateValue = parsed["State"];
+    const char * stateValue = jsonDocument["State"];
     Serial.print("State: [");
     Serial.print(stateValue);
     Serial.println("]");
