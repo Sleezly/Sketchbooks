@@ -3,22 +3,19 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-// Contact Sensor 1 Pins
-const short int BUILTIN_LED2 = 16;
-const short int GROUND_PIN_2 = 5;
+#define GARAGE
 
-// Contact Sensor 2 Pins
-const short int GROUND_PIN_1 = 0; 
-const short int BUILTIN_LED1 = 2;
+extern void loopPantry(PubSubClient *client, short int led1, short int led2, short int buzzer);
+extern void loopGarage(PubSubClient *client, short int led1, short int led2);
 
-// Buzzer Pins
-const short int BUZZER_PIN = 14;
-const short int GROUND_PIN_3 = 12; 
+extern void callbackPantry(byte* payload);
+extern void callbackGarage(PubSubClient* client, short int relay);
 
-const int initialAudibleDelay = 15000;
-const int initialAudibleStep = 5000;
-const int minAudibledelay = 1500;
-const int audibleDelaySteps = 750;
+#ifdef PANTRY
+const char* subtopic = "home/alarms";
+#else
+const char* subtopic = "home/garage/set";
+#endif
 
 // WIFI
 const char* ssid     = "";
@@ -27,18 +24,29 @@ const char* password = "";
 // MQTT
 const char* mqtthost = "192.168.1.2";
 const int   mqttport = 1883;
-const char* mqttuser = "esp8266";
+const char* mqttuser = "";
 const char* mqttpass = "";
-const char* pubtopic = "home/pantry";
-const char* subtopic = "home/alarms";
-
-const char* StateOnJson =  "{ \"State\": \"On\" }";
 
 char mqttUniqueId[16] = {0};
 
+const short BUILTIN_LED1 = 2;
+const short BUILTIN_LED2 = 16;
+
+// Contact Sensor Pins
+const short GROUND_PIN_1 = 0;
+const short GROUND_PIN_2 = 5;
+
+#ifdef PANTRY
+// Buzzer Pins Pins
+const short BUZZER_PIN = 14;
+const short GROUND_PIN_3 = 12; 
+#else
+// Relay Pin
+const short PIN_RELAY = 4;
+#endif
+
 WiFiClient espClient;
 PubSubClient client(espClient);
-bool generateBeep = true;
 
 void callback(char* topic, byte* payload, unsigned int length)
 {
@@ -51,25 +59,11 @@ void callback(char* topic, byte* payload, unsigned int length)
   }
   Serial.println("]");
 
-  StaticJsonDocument<256> jsonDocument;
-  DeserializationError error = deserializeJson(jsonDocument, payload);
-  
-  if (!error)
-  {
-    const char * stateValue = jsonDocument["State"];
-    Serial.print("State: [");
-    Serial.print(stateValue);
-    Serial.println("]");
-
-    if (strcmp("On", stateValue) == 0 || strcmp("on", stateValue) == 0)
-    {
-      generateBeep = true;
-    }
-    else if (strcmp("Off", stateValue) == 0 || strcmp("off", stateValue) == 0)
-    {
-      generateBeep = false;
-    }
-  }
+#ifdef PANTRY
+  callbackPantry(payload);
+#else
+  callbackGarage(&client, PIN_RELAY);
+#endif
 }
 
 void setup()
@@ -78,22 +72,38 @@ void setup()
 
   delay(100);
 
-  pinMode(BUILTIN_LED1, INPUT);
-  pinMode(BUILTIN_LED2, INPUT);
-
+#ifdef PANTRY
   // Set grounding pins
   pinMode(GROUND_PIN_1, OUTPUT);
   pinMode(GROUND_PIN_2, OUTPUT);
   pinMode(GROUND_PIN_3, OUTPUT);
 
+  pinMode(BUILTIN_LED1, INPUT);
+  pinMode(BUILTIN_LED2, INPUT);
+
   digitalWrite(GROUND_PIN_1, LOW);
   digitalWrite(GROUND_PIN_2, LOW);
   digitalWrite(GROUND_PIN_3, LOW);
+#else
+  // Relay
+  pinMode(PIN_RELAY, OUTPUT);
+  digitalWrite(PIN_RELAY, LOW);
+
+  // Contact Sensors
+  pinMode(GROUND_PIN_1, OUTPUT);
+  pinMode(GROUND_PIN_2, OUTPUT);
+
+  pinMode(BUILTIN_LED1, INPUT);
+  pinMode(BUILTIN_LED2, INPUT);
+
+  digitalWrite(GROUND_PIN_1, LOW);
+  digitalWrite(GROUND_PIN_2, LOW);
+#endif
 
   delay(100);
 
   // Generate a unique ID for our MQTT client
-  snprintf(mqttUniqueId, 25, "ESP8266-%08X", ESP.getChipId());
+  snprintf(mqttUniqueId, 25, "ESP8266-Garage-%08X", ESP.getChipId());
 
   // Connect to WiFi
   Serial.println();
@@ -155,78 +165,11 @@ void loop()
 {
   MqttLoop();
 
-  int pin1 = digitalRead(BUILTIN_LED1);
-  int pin2 = digitalRead(BUILTIN_LED2);
-
-  // Check if either door is open
-  if (pin1 == 1 || pin2 == 1)
-  {
-
-    // Publish an 'Open Door' event to the MQTT broker
-    Serial.print(pubtopic);
-    Serial.println(": Open");
-    client.publish(pubtopic, "{ \"Door\": \"Open\" }");
-
-    // Wait a bit
-    for (int i = 0; i < 100; i++)
-    {
-      delay(initialAudibleDelay / 100);
-      MqttLoop();
-
-      pin1 = digitalRead(BUILTIN_LED1);
-      pin2 = digitalRead(BUILTIN_LED2);
-
-      if (pin1 == 0 && pin2 == 0)
-      {
-        break;
-      }
-    }
-
-
-    // Emit beeps until the door is closed
-    int audibleDelay = initialAudibleStep;
-    while (pin1 == 1 || pin2 == 1)
-    {
-      // Emit a beep
-      if (generateBeep)
-      {
-        tone(BUZZER_PIN, 4000);
-        delay(150);
-        noTone(BUZZER_PIN);
-      }
-
-
-      // Wait a bit
-      for (int i = 0; i < 100; i++)
-      {
-        delay(audibleDelay / 100);
-        MqttLoop();
-
-        pin1 = digitalRead(BUILTIN_LED1);
-        pin2 = digitalRead(BUILTIN_LED2);
-
-        if (pin1 == 0 && pin2 == 0)
-        {
-          break;
-        }
-      }
-
-
-      // Step down the wait duration
-      audibleDelay -= audibleDelaySteps;
-      if (audibleDelay < minAudibledelay)
-      { 
-        audibleDelay = minAudibledelay;
-      }
-    }
-
-
-    // Publish a 'Closed Door' event to the MQTT broker
-    Serial.print(pubtopic);
-    Serial.println(": Closed");
-    client.publish(pubtopic, "{ \"Door\": \"Closed\" }");
-  }
-
+#ifdef PANTRY
+  loopPantry(&client, BUILTIN_LED1, BUILTIN_LED2, BUZZER_PIN);
+#else
+  loopGarage(&client, BUILTIN_LED1, BUILTIN_LED2);
+#endif
 
   delay(500);
 }
