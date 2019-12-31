@@ -18,16 +18,21 @@ const char* StateOperatingJson =  "{ \"Door\": \"Moving\" }";
 enum DOOR_STATE
 {
   DOOR_STATE_UNUSED = 0,
+
   DOOR_STATE_OPENED,
   DOOR_STATE_CLOSED,
   DOOR_STATE_STALLED,
+
   DOOR_STATE_OPERATING,
 };
 
 DOOR_STATE doorState = DOOR_STATE_UNUSED;
 
+int DelayCounter = -1;
+
 void callbackGarage(PubSubClient* client, short int pin)
 {
+  DelayCounter = STALL_DELAY_IN_SECONDS;
   doorState = DOOR_STATE_OPERATING;
 
   client->publish(mqttGarageTopic, StateOperatingJson);
@@ -46,7 +51,12 @@ void loopGarage(PubSubClient *client, short int led1, short int led2)
   int pin1 = digitalRead(led1);
   int pin2 = digitalRead(led2);
 
-   if (pin1 == 0)
+  if (DelayCounter > 0)
+  {
+    DelayCounter--;
+  }
+
+  if (pin1 == 0 && pin2 != 0)
   {
     if (doorState != DOOR_STATE_OPENED)
     {
@@ -57,8 +67,11 @@ void loopGarage(PubSubClient *client, short int led1, short int led2)
       Serial.print(StateOpenedJson);
       Serial.println("]");
     }
+
+    return;
   }
-  else if (pin2 == 0)
+  
+  if (pin1 != 0 && pin2 == 0)
   {
     if (doorState != DOOR_STATE_CLOSED)
     {
@@ -69,36 +82,34 @@ void loopGarage(PubSubClient *client, short int led1, short int led2)
       Serial.print(StateClosedJson);
       Serial.println("]");
     }
+
+    return;
   }
-  else
+  
+  if (doorState == DOOR_STATE_OPENED || 
+      doorState == DOOR_STATE_CLOSED)
   {
-    if (doorState != DOOR_STATE_STALLED)
-    {
-      int stalledDelayCounter = STALL_DELAY_IN_SECONDS;
+    DelayCounter = STALL_DELAY_IN_SECONDS;
+    doorState = DOOR_STATE_OPERATING;
 
-      while (stalledDelayCounter != 0)
-      {
-        delay(1000);
+    client->publish(mqttGarageTopic, StateOperatingJson);
 
-        MqttLoop();
+    Serial.print("Now [");
+    Serial.print(StateOperatingJson);
+    Serial.println("]");
 
-        pin1 = digitalRead(led1);
-        pin2 = digitalRead(led2);
+    return;
+  }
 
-        if (pin1 == 0 || pin2 == 0)
-        {
-          return;
-        }
+  if (doorState != DOOR_STATE_STALLED && DelayCounter == 0)
+  {
+    DelayCounter = -1;
+    
+    doorState = DOOR_STATE_STALLED;
+    client->publish(mqttGarageTopic, StateStalledJson);
 
-        stalledDelayCounter--;
-      }
-
-      doorState = DOOR_STATE_STALLED;
-      client->publish(mqttGarageTopic, StateStalledJson);
-
-      Serial.print("Now [");
-      Serial.print(StateStalledJson);
-      Serial.println("]");
-    }
+    Serial.print("Now [");
+    Serial.print(StateStalledJson);
+    Serial.println("]");
   }
 }
