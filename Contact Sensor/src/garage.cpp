@@ -50,7 +50,7 @@ void ChangeState(PubSubClient *client, DOOR_STATE doorState)
   }
 
   LastDoorState = doorState;
-  client->publish(mqttGarageTopic, jsonState);
+  client->publish(mqttGarageTopic, jsonState, true);
 
   Serial.print("Now [");
   Serial.print(jsonState);

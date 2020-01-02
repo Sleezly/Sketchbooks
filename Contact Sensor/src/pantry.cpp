@@ -50,7 +50,7 @@ void loopPantry(PubSubClient *client, short int led1, short int led2, short int 
     // Publish an 'Open Door' event to the MQTT broker
     Serial.print(pubtopic);
     Serial.println(": Open");
-    client->publish(pubtopic, "{ \"Door\": \"Open\" }");
+    client->publish(pubtopic, "{ \"Door\": \"Open\" }", true);
 
     // Wait a bit
     for (int i = 0; i < 100; i++)
@@ -109,6 +109,6 @@ void loopPantry(PubSubClient *client, short int led1, short int led2, short int 
     // Publish a 'Closed Door' event to the MQTT broker
     Serial.print(pubtopic);
     Serial.println(": Closed");
-    client->publish(pubtopic, "{ \"Door\": \"Closed\" }");
+    client->publish(pubtopic, "{ \"Door\": \"Closed\" }", true);
   }
 }
