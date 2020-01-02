@@ -8,9 +8,9 @@ extern void MqttLoop();
 // MQTT callback parsing
 const char* mqttGarageTopic = "home/garage";
 
-const char* StateOpenedJson = "{ \"Door\": \"Opened\" }";
-const char* StateClosedJson = "{ \"Door\": \"Closed\" }";
-const char* StateMovingJson = "{ \"Door\": \"Moving\" }";
+const char* StateJsonOpened = "{ \"Door\": \"Opened\" }";
+const char* StateJsonClosed = "{ \"Door\": \"Closed\" }";
+const char* StateJsonStall =  "{ \"Door\": \"Ajar\" }";
 
 enum DOOR_STATE
 {
@@ -18,69 +18,79 @@ enum DOOR_STATE
 
   DOOR_STATE_OPENED,
   DOOR_STATE_CLOSED,
-  DOOR_STATE_MOVING,
 };
 
-DOOR_STATE doorState = DOOR_STATE_UNUSED;
-
-int DelayCounter = -1;
+DOOR_STATE LastDoorState = DOOR_STATE_UNUSED;
 
 void callbackGarage(PubSubClient* client, short int pin)
 {
-  doorState = DOOR_STATE_MOVING;
-  client->publish(mqttGarageTopic, StateMovingJson);
-
-  Serial.print("Now [");
-  Serial.print(StateOperatingJson);
-  Serial.println("]");
-
   digitalWrite(pin, HIGH);
-  delay(500);
+  delay(250);
   digitalWrite(pin, LOW);
 }
 
-void loopGarage(PubSubClient *client, short int led1, short int led2)
+void ChangeState(PubSubClient *client, DOOR_STATE doorState)
 {
-  int pin1 = digitalRead(led1);
-  int pin2 = digitalRead(led2);
-
-  if (pin1 == 0 && pin2 != 0)
+  if (LastDoorState == doorState)
   {
-    if (doorState != DOOR_STATE_OPENED)
-    {
-      doorState = DOOR_STATE_OPENED;
-      client->publish(mqttGarageTopic, StateOpenedJson);
-
-      Serial.print("Now [");
-      Serial.print(StateOpenedJson);
-      Serial.println("]");
-    }
-
     return;
   }
-  
-  if (pin1 != 0 && pin2 == 0)
+
+  const char* jsonState;
+  switch (doorState)
   {
-    if (doorState != DOOR_STATE_CLOSED)
-    {
-      doorState = DOOR_STATE_CLOSED;
-      client->publish(mqttGarageTopic, StateClosedJson);
+    case DOOR_STATE_CLOSED:
+      jsonState = StateJsonClosed;
+      break;
 
-      Serial.print("Now [");
-      Serial.print(StateClosedJson);
-      Serial.println("]");
-    }
-
-    return;
+    case DOOR_STATE_OPENED:
+    default:
+      jsonState = StateJsonOpened;
+      break;
   }
-  
-  if (doorState != DOOR_STATE_MOVING)
-  {
-    doorState = DOOR_STATE_MOVING;
-    client->publish(mqttGarageTopic, StateMovingJson);
 
-    Serial.print("Now [");
-    Serial.print(StateMovingJson);
-    Serial.println("]");
+  LastDoorState = doorState;
+  client->publish(mqttGarageTopic, jsonState);
+
+  Serial.print("Now [");
+  Serial.print(jsonState);
+  Serial.println("]");
+}
+
+bool CheckSensor(PubSubClient *client, DOOR_STATE doorStateToCheck, short int sensorPin)
+{
+  int timesToCheck = 10;
+  int sensorValue = digitalRead(sensorPin);
+
+  while (sensorValue == 0 && timesToCheck > 0)
+  {
+    delay(10);
+
+    MqttLoop();
+
+    sensorValue = digitalRead(sensorPin);
+    timesToCheck--;
+  }
+
+  if (sensorValue == 0)
+  {
+    ChangeState(client, doorStateToCheck);
+    return true;
+  }
+
+  return false;
+}
+
+void loopGarage(PubSubClient *client, short int sensorPin1, short int sensorPin2)
+{
+  bool anyDoorSensorsSet = false;
+  
+  anyDoorSensorsSet |= CheckSensor(client, DOOR_STATE_OPENED, sensorPin1);
+  anyDoorSensorsSet |= CheckSensor(client, DOOR_STATE_CLOSED, sensorPin2);
+
+  if (!anyDoorSensorsSet)
+  {
+    // Assume an opened garage door when no sensors are set.
+    ChangeState(client, DOOR_STATE_OPENED);
   }
 }
