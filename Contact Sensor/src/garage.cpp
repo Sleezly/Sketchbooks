@@ -10,7 +10,6 @@ const char* mqttGarageTopic = "home/garage";
 
 const char* StateJsonOpened = "{ \"Door\": \"Opened\" }";
 const char* StateJsonClosed = "{ \"Door\": \"Closed\" }";
-const char* StateJsonStall =  "{ \"Door\": \"Ajar\" }";
 
 enum DOOR_STATE
 {
@@ -57,40 +56,17 @@ void ChangeState(PubSubClient *client, DOOR_STATE doorState)
   Serial.println("]");
 }
 
-bool CheckSensor(PubSubClient *client, DOOR_STATE doorStateToCheck, short int sensorPin)
+void loopGarage(PubSubClient *client, short int sensorPin)
 {
-  int timesToCheck = 10;
   int sensorValue = digitalRead(sensorPin);
 
-  while (sensorValue == 0 && timesToCheck > 0)
+  if (0 == sensorValue)
   {
-    delay(10);
-
-    MqttLoop();
-
-    sensorValue = digitalRead(sensorPin);
-    timesToCheck--;
+    ChangeState(client, DOOR_STATE_CLOSED);
   }
-
-  if (sensorValue == 0)
+  else
   {
-    ChangeState(client, doorStateToCheck);
-    return true;
-  }
-
-  return false;
-}
-
-void loopGarage(PubSubClient *client, short int sensorPin1, short int sensorPin2)
-{
-  bool anyDoorSensorsSet = false;
-  
-  anyDoorSensorsSet |= CheckSensor(client, DOOR_STATE_OPENED, sensorPin1);
-  anyDoorSensorsSet |= CheckSensor(client, DOOR_STATE_CLOSED, sensorPin2);
-
-  if (!anyDoorSensorsSet)
-  {
-    // Assume an opened garage door when no sensors are set.
+    // Assume an opened door state when the closed sensor is not set.
     ChangeState(client, DOOR_STATE_OPENED);
   }
 }

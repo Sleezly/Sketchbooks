@@ -4,9 +4,10 @@
 #include <ArduinoJson.h>
 
 #define GARAGE
+//#define PANTRY
 
 extern void loopPantry(PubSubClient *client, short int led1, short int led2, short int buzzer);
-extern void loopGarage(PubSubClient *client, short int led1, short int led2);
+extern void loopGarage(PubSubClient *client, short int sensorPin);
 
 extern void callbackPantry(byte* payload);
 extern void callbackGarage(PubSubClient* client, short int relay);
@@ -18,31 +19,36 @@ const char* subtopic = "home/garage/set";
 #endif
 
 // WIFI
-const char* ssid     = "";
-const char* password = "";
+const char* ssid     = "Unknown";
+const char* password = "uppercase1337";
 
 // MQTT
-const char* mqtthost = "192.168.1.2";
+const char* mqtthost = "192.168.1.5";
 const int   mqttport = 1883;
-const char* mqttuser = "";
-const char* mqttpass = "";
+const char* mqttuser = "esp8266";
+const char* mqttpass = "yavin333";
 
 char mqttUniqueId[16] = {0};
-
-const short BUILTIN_LED1 = 2;
-const short BUILTIN_LED2 = 16;
-
-// Contact Sensor Pins
-const short GROUND_PIN_1 = 0;
-const short GROUND_PIN_2 = 5;
 
 #ifdef PANTRY
 // Buzzer Pins Pins
 const short BUZZER_PIN = 14;
 const short GROUND_PIN_3 = 12; 
+
+// LED 1
+const short BUILTIN_LED1 = 2;
+const short GROUND_PIN_1 = 0;
+
+// LED 2
+const short BUILTIN_LED2 = 16;
+const short GROUND_PIN_2 = 5;
 #else
 // Relay Pin
-const short PIN_RELAY = 4;
+const short PIN_RELAY = 14;
+
+// LED 2
+const short SENSOR_PIN_IN = 2;
+const short SENSOR_PIN_GROUND = 4;
 #endif
 
 WiFiClient espClient;
@@ -90,14 +96,9 @@ void setup()
   digitalWrite(PIN_RELAY, LOW);
 
   // Contact Sensors
-  pinMode(GROUND_PIN_1, OUTPUT);
-  pinMode(GROUND_PIN_2, OUTPUT);
-
-  pinMode(BUILTIN_LED1, INPUT);
-  pinMode(BUILTIN_LED2, INPUT);
-
-  digitalWrite(GROUND_PIN_1, LOW);
-  digitalWrite(GROUND_PIN_2, LOW);
+  pinMode(SENSOR_PIN_IN, INPUT);
+  pinMode(SENSOR_PIN_GROUND, OUTPUT);
+  digitalWrite(SENSOR_PIN_GROUND, LOW);
 #endif
 
   delay(100);
@@ -168,7 +169,7 @@ void loop()
 #ifdef PANTRY
   loopPantry(&client, BUILTIN_LED1, BUILTIN_LED2, BUZZER_PIN);
 #else
-  loopGarage(&client, BUILTIN_LED1, BUILTIN_LED2);
+  loopGarage(&client, SENSOR_PIN_IN);
 #endif
 
   delay(500);
